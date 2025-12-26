@@ -1,0 +1,635 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  Calculator, 
+  TrendingUp, 
+  ShoppingCart, 
+  DollarSign, 
+  Target, 
+  Activity,
+  MousePointerClick,
+  Users,
+  CreditCard,
+  BarChart3,
+  ArrowRight,
+  Split,
+  Equal,
+  Sparkles,
+  ArrowUpRight,
+  ArrowDownRight
+} from 'lucide-react';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  Cell
+} from 'recharts';
+
+// --- Interfaces ---
+interface AdParams {
+  budget: number;
+  cpm: number;
+  ctr: number;
+  atcRate: number;
+  cartConvRate: number;
+  aov: number;
+}
+
+// UI Components
+const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => (
+  <div className={`bg-white rounded-xl shadow-sm border border-slate-200 ${className}`}>
+    {children}
+  </div>
+);
+
+// Modified InputGroup to support Simulation Value
+const InputGroup = ({ 
+  label, 
+  value, 
+  simValue, 
+  onChange, 
+  onSimChange, 
+  min, 
+  max, 
+  step, 
+  unit, 
+  prefix = "", 
+  colorTheme = "blue" 
+}: any) => {
+  const ringClass = colorTheme === "emerald" ? "focus:ring-emerald-500" : "focus:ring-blue-500";
+  const simActive = simValue > 0 && simValue !== value;
+  
+  return (
+    <div className="mb-4">
+      <label className="text-xs font-medium text-slate-500 mb-1.5 flex justify-between">
+        <span>{label}</span>
+        <span className="text-[10px] text-slate-400 font-normal">現況 vs 模擬</span>
+      </label>
+      <div className="flex items-center gap-2">
+        {/* Base Input */}
+        <div className="relative flex-1">
+          {prefix && (
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-medium">
+              {prefix}
+            </span>
+          )}
+          <input
+            type="number"
+            min={min}
+            max={max}
+            step={step}
+            value={value}
+            onChange={(e) => onChange(Number(e.target.value))}
+            className={`w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:border-transparent transition-all ${prefix ? 'pl-7' : ''} ${unit ? 'pr-8' : ''} ${ringClass}`}
+            placeholder="現況"
+          />
+          {unit && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-medium">
+              {unit}
+            </span>
+          )}
+        </div>
+
+        {/* Arrow Indicator */}
+        <div className="text-slate-300">
+          <ArrowRight size={14} />
+        </div>
+
+        {/* Simulation Input */}
+        <div className="relative flex-1">
+          {prefix && (
+            <span className={`absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium ${simActive ? 'text-blue-600' : 'text-slate-300'}`}>
+              {prefix}
+            </span>
+          )}
+          <input
+            type="number"
+            min={min}
+            max={max}
+            step={step}
+            value={simValue || ''}
+            onChange={(e) => onSimChange(Number(e.target.value))}
+            className={`w-full px-3 py-2 bg-white border-2 border-dashed rounded-lg text-sm font-semibold focus:outline-none focus:ring-2 focus:border-transparent transition-all ${prefix ? 'pl-7' : ''} ${unit ? 'pr-8' : ''} ${ringClass} ${simActive ? 'border-blue-400 text-blue-700 bg-blue-50/30' : 'border-slate-200 text-slate-400'}`}
+            placeholder="模擬值"
+          />
+          {unit && (
+            <span className={`absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium ${simActive ? 'text-blue-500' : 'text-slate-300'}`}>
+              {unit}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Modified MetricCard to show Comparisons and support Decimals
+const MetricCard = ({ title, value, simValue, subtext, icon: Icon, color = "blue", isCurrency = false, isPercentage = false, isDecimal = false }: any) => {
+  const colorClasses: any = {
+    blue: "text-blue-600 bg-blue-50",
+    emerald: "text-emerald-600 bg-emerald-50",
+    purple: "text-purple-600 bg-purple-50",
+    orange: "text-orange-600 bg-orange-50",
+    slate: "text-slate-600 bg-slate-50",
+  };
+
+  const hasChange = simValue !== undefined && simValue !== value;
+  const diff = hasChange ? simValue - value : 0;
+  const isPositive = diff > 0;
+  
+  // Format helpers
+  const fmt = (v: number) => {
+    if (isCurrency) return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(v);
+    if (isPercentage) return `${v.toFixed(2)}%`;
+    if (isDecimal) return v.toFixed(2); // New: Force 2 decimals for ROAS
+    return v.toLocaleString();
+  };
+
+  return (
+    <Card className="p-4 flex flex-col justify-between h-full border-l-4 border-l-transparent hover:border-l-blue-500 transition-all duration-200">
+      <div className="flex justify-between items-start mb-2">
+        <h3 className="text-slate-500 text-xs font-semibold uppercase tracking-wider">{title}</h3>
+        <div className={`p-2 rounded-lg ${colorClasses[color]}`}>
+          <Icon size={18} />
+        </div>
+      </div>
+      <div>
+        <div className="flex items-baseline gap-2">
+            <div className={`text-2xl font-bold ${hasChange ? 'text-slate-400 line-through decoration-slate-300 decoration-2 text-lg' : 'text-slate-900'}`}>
+                {fmt(value)}
+            </div>
+            {hasChange && (
+                <div className="text-2xl font-bold text-slate-900">
+                    {fmt(simValue)}
+                </div>
+            )}
+        </div>
+        
+        {hasChange && (
+             <div className={`text-xs font-bold mt-1 flex items-center gap-1 ${isPositive ? 'text-emerald-600' : 'text-rose-500'}`}>
+                {isPositive ? <ArrowUpRight size={12}/> : <ArrowDownRight size={12}/>}
+                {isCurrency && diff > 0 ? '+' : ''}{fmt(diff)}
+             </div>
+        )}
+
+        {!hasChange && subtext && <div className="text-xs text-slate-500 mt-1">{subtext}</div>}
+      </div>
+    </Card>
+  );
+};
+
+const SectionHeader = ({ title, icon: Icon, className = "text-slate-800" }: any) => (
+  <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100">
+    <Icon className={`opacity-60 ${className}`} size={20} />
+    <h2 className={`text-lg font-bold ${className}`}>{title}</h2>
+  </div>
+);
+
+// Comparison Result Row with Decimal Support
+const ResultRow = ({ label, base, sim, isCurrency = false, isPercent = false, isDecimal = false, inverseBad = false }: any) => {
+    const hasSim = sim !== undefined && sim !== base;
+    const diff = sim - base;
+    // For CPA, lower is better (inverse logic)
+    const isGood = inverseBad ? diff < 0 : diff > 0; 
+    
+    const fmt = (v: number) => {
+        if (isCurrency) return new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(v);
+        if (isPercent) return `${v.toFixed(2)}%`;
+        if (isDecimal) return v.toFixed(2); // New: Force 2 decimals
+        return Math.round(v).toLocaleString(); // Default rounds to integer
+    };
+
+    return (
+        <div className="flex flex-col mt-2 pt-2 border-t border-slate-200/60">
+            <span className="text-slate-500 text-xs mb-1">{label}</span>
+            <div className="flex justify-between items-center">
+                <span className={`font-bold ${hasSim ? 'text-slate-400 text-xs' : 'text-slate-700'}`}>
+                    {fmt(base)}
+                </span>
+                {hasSim && (
+                    <div className="flex items-center gap-2">
+                         <ArrowRight size={12} className="text-slate-300"/>
+                         <span className={`font-bold text-sm ${isGood ? 'text-emerald-600' : 'text-rose-500'}`}>
+                            {fmt(sim)}
+                         </span>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+// Campaign Result Preview with Comparison
+const CampaignResultPreview = ({ metrics, simMetrics, colorTheme }: any) => {
+    const bgClass = colorTheme === "emerald" ? "bg-emerald-50/50 border-emerald-100" : "bg-blue-50/50 border-blue-100";
+    const textClass = colorTheme === "emerald" ? "text-emerald-700" : "text-blue-700";
+    
+    return (
+        <div className={`mt-auto pt-3 border-t border-dashed ${colorTheme === 'emerald' ? 'border-emerald-200' : 'border-blue-200'}`}>
+            <h4 className={`text-xs font-bold uppercase mb-3 flex items-center gap-1 ${textClass}`}>
+                <Equal size={12} />
+                該渠道預估成效
+            </h4>
+            <div className={`grid grid-cols-2 gap-x-4 gap-y-1 text-xs rounded-lg p-3 border ${bgClass}`}>
+                <ResultRow label="CPC" base={metrics.cpc} sim={simMetrics.cpc} isCurrency inverseBad />
+                <ResultRow label="預估點擊" base={metrics.clicks} sim={simMetrics.clicks} />
+                <ResultRow label="CPA" base={metrics.cpa} sim={simMetrics.cpa} isCurrency inverseBad />
+                <ResultRow label="預估訂單" base={metrics.purchases} sim={simMetrics.purchases} />
+                <ResultRow label="CVR" base={metrics.cvr} sim={simMetrics.cvr} isPercent />
+                <ResultRow label="ROAS" base={metrics.roas} sim={simMetrics.roas} isDecimal />
+            </div>
+        </div>
+    );
+};
+
+// Sensitivity Analysis Component
+const SensitivityAnalysis = ({ baseMetrics, mergedInputs }: { baseMetrics: any, mergedInputs: { traffic: AdParams, conv: AdParams } }) => {
+    // Helper to run a simulation for a single parameter change
+    const simulateChange = (
+        campaignType: 'traffic' | 'conv', 
+        param: keyof AdParams, 
+        percentChange: number
+    ) => {
+        // Clone inputs
+        const simInputs = JSON.parse(JSON.stringify(mergedInputs));
+        const targetCampaign = campaignType === 'traffic' ? simInputs.traffic : simInputs.conv;
+        
+        // Apply change (inverse for CPM)
+        if (param === 'cpm') {
+            targetCampaign[param] = targetCampaign[param] * (1 - percentChange); // Decrease CPM
+        } else {
+            targetCampaign[param] = targetCampaign[param] * (1 + percentChange); // Increase others
+        }
+        
+        // Recalculate Logic (Simplified for speed)
+        const calc = (inputs: AdParams) => {
+            const imp = (inputs.budget / inputs.cpm) * 1000;
+            const clicks = imp * (inputs.ctr / 100);
+            const atc = clicks * (inputs.atcRate / 100);
+            const purchases = atc * (inputs.cartConvRate / 100);
+            return purchases * inputs.aov;
+        };
+
+        const newRevTraffic = campaignType === 'traffic' ? calc(targetCampaign) : calc(simInputs.traffic);
+        const newRevConv = campaignType === 'conv' ? calc(targetCampaign) : calc(simInputs.conv);
+        
+        return (newRevTraffic + newRevConv) - baseMetrics.revenue; // Net Revenue Gain
+    };
+
+    const scenarios = [
+        { name: '流量廣告 CTR +10%', gain: simulateChange('traffic', 'ctr', 0.1), type: 'traffic' },
+        { name: '流量廣告 AOV +10%', gain: simulateChange('traffic', 'aov', 0.1), type: 'traffic' },
+        { name: '流量廣告 結帳率 +10%', gain: simulateChange('traffic', 'cartConvRate', 0.1), type: 'traffic' },
+        { name: '轉換廣告 CTR +10%', gain: simulateChange('conv', 'ctr', 0.1), type: 'conv' },
+        { name: '轉換廣告 AOV +10%', gain: simulateChange('conv', 'aov', 0.1), type: 'conv' },
+        { name: '轉換廣告 結帳率 +10%', gain: simulateChange('conv', 'cartConvRate', 0.1), type: 'conv' },
+        { name: '流量 CPM 降低 10%', gain: simulateChange('traffic', 'cpm', 0.1), type: 'traffic' },
+        { name: '轉換 CPM 降低 10%', gain: simulateChange('conv', 'cpm', 0.1), type: 'conv' },
+    ].sort((a, b) => b.gain - a.gain).slice(0, 3); // Top 3
+
+    return (
+        <Card className="p-5 bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
+            <SectionHeader title="營收成長機會點分析 (Top 3)" icon={Sparkles} className="text-indigo-800" />
+            <div className="space-y-3 mt-2">
+                {scenarios.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center p-2 bg-white rounded-lg border border-indigo-50 shadow-sm">
+                        <div className="flex items-center gap-2">
+                            <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${item.type === 'traffic' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                {idx + 1}
+                            </span>
+                            <span className="text-sm text-slate-700 font-medium">{item.name}</span>
+                        </div>
+                        <div className="text-indigo-600 font-bold text-sm">
+                            +${Math.round(item.gain).toLocaleString()}
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <p className="text-[10px] text-slate-400 mt-3 text-center">
+                *基於當前輸入數據，模擬各指標優化 10% 後的預估營收增長金額。
+            </p>
+        </Card>
+    );
+};
+
+export default function EcommerceSimulator() {
+  // --- State: Base Inputs ---
+  const [trafficAds, setTrafficAds] = useState<AdParams>({
+    budget: 50000, cpm: 120, ctr: 2.0, atcRate: 0, cartConvRate: 0, aov: 0
+  });
+  const [convAds, setConvAds] = useState<AdParams>({
+    budget: 50000, cpm: 250, ctr: 1.2, atcRate: 10.0, cartConvRate: 35.0, aov: 1500
+  });
+
+  // --- State: Simulation Inputs (0 or empty means use base) ---
+  const [trafficSim, setTrafficSim] = useState<Partial<AdParams>>({});
+  const [convSim, setConvSim] = useState<Partial<AdParams>>({});
+
+  // handlers
+  const handleTrafficChange = (key: keyof AdParams, val: number) => setTrafficAds(prev => ({...prev, [key]: val}));
+  const handleConvChange = (key: keyof AdParams, val: number) => setConvAds(prev => ({...prev, [key]: val}));
+  
+  const handleTrafficSimChange = (key: keyof AdParams, val: number) => setTrafficSim(prev => ({...prev, [key]: val}));
+  const handleConvSimChange = (key: keyof AdParams, val: number) => setConvSim(prev => ({...prev, [key]: val}));
+
+  // --- Calculation Logic ---
+  const calculateMetrics = (inputs: AdParams) => {
+    const { budget, cpm, ctr, atcRate, cartConvRate, aov } = inputs;
+    
+    const safeBudget = Math.max(0, budget);
+    const safeCpm = Math.max(0.1, cpm);
+
+    const impressions = safeCpm > 0 ? (safeBudget / safeCpm) * 1000 : 0;
+    const clicks = impressions * (ctr / 100);
+    const atcCount = clicks * (atcRate / 100);
+    const purchases = atcCount * (cartConvRate / 100);
+    const revenue = purchases * aov;
+    
+    const cpc = clicks > 0 ? safeBudget / clicks : 0;
+    const cpa = purchases > 0 ? safeBudget / purchases : 0;
+    const roas = safeBudget > 0 ? revenue / safeBudget : 0;
+    const cvr = clicks > 0 ? (purchases / clicks) * 100 : 0;
+    
+    return { budget, impressions, clicks, atcCount, purchases, revenue, cpc, cpa, roas, cvr };
+  };
+
+  // Helper to merge base and sim
+  const getEffectiveInputs = (base: AdParams, sim: Partial<AdParams>): AdParams => {
+      return {
+          budget: sim.budget && sim.budget > 0 ? sim.budget : base.budget,
+          cpm: sim.cpm && sim.cpm > 0 ? sim.cpm : base.cpm,
+          ctr: sim.ctr && sim.ctr > 0 ? sim.ctr : base.ctr,
+          atcRate: sim.atcRate && sim.atcRate > 0 ? sim.atcRate : base.atcRate,
+          cartConvRate: sim.cartConvRate && sim.cartConvRate > 0 ? sim.cartConvRate : base.cartConvRate,
+          aov: sim.aov && sim.aov > 0 ? sim.aov : base.aov,
+      };
+  };
+
+  // 1. Calculate Base Results
+  const trafficBaseMetrics = useMemo(() => calculateMetrics(trafficAds), [trafficAds]);
+  const convBaseMetrics = useMemo(() => calculateMetrics(convAds), [convAds]);
+
+  // 2. Calculate Simulated Results
+  const trafficSimInputs = getEffectiveInputs(trafficAds, trafficSim);
+  const convSimInputs = getEffectiveInputs(convAds, convSim);
+  
+  const trafficSimMetrics = useMemo(() => calculateMetrics(trafficSimInputs), [trafficSimInputs]);
+  const convSimMetrics = useMemo(() => calculateMetrics(convSimInputs), [convSimInputs]);
+
+  // 3. Blended Calculations (Function to avoid duplication)
+  const getBlended = (t: any, c: any) => {
+      const totalBudget = t.budget + c.budget;
+      const totalRevenue = t.revenue + c.revenue;
+      const totalImpressions = t.impressions + c.impressions;
+      const totalClicks = t.clicks + c.clicks;
+      const totalAtc = t.atcCount + c.atcCount;
+      const totalPurchases = t.purchases + c.purchases;
+      
+      const roas = totalBudget > 0 ? totalRevenue / totalBudget : 0;
+      const cpa = totalPurchases > 0 ? totalBudget / totalPurchases : 0;
+      const cpc = totalClicks > 0 ? totalBudget / totalClicks : 0;
+      const overallCvr = totalClicks > 0 ? (totalPurchases / totalClicks) * 100 : 0;
+      const blendedAov = totalPurchases > 0 ? totalRevenue / totalPurchases : 0;
+
+      // For Funnel Chart
+      const blendedCtr = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+      const blendedAtcRate = totalClicks > 0 ? (totalAtc / totalClicks) * 100 : 0;
+      const blendedCartConvRate = totalAtc > 0 ? (totalPurchases / totalAtc) * 100 : 0;
+
+      return { roas, revenue: totalRevenue, cpa, impressions: totalImpressions, clicks: totalClicks, cpc, atcCount: totalAtc, purchases: totalPurchases, overallCvr, blendedAov, blendedCtr, blendedAtcRate, blendedCartConvRate };
+  };
+
+  const blendedBase = useMemo(() => getBlended(trafficBaseMetrics, convBaseMetrics), [trafficBaseMetrics, convBaseMetrics]);
+  const blendedSim = useMemo(() => getBlended(trafficSimMetrics, convSimMetrics), [trafficSimMetrics, convSimMetrics]);
+
+  // Chart Data (Simulated takes precedence visually if changed, otherwise Base)
+  // To keep chart simple, we show Simulated Data
+  const funnelData = [
+    { name: '點擊 (Clicks)', value: blendedSim.clicks, fill: '#60a5fa' },
+    { name: '加購 (ATC)', value: blendedSim.atcCount, fill: '#818cf8' },
+    { name: '購買 (Order)', value: blendedSim.purchases, fill: '#34d399' },
+  ];
+
+  const formatNumber = (val: number) => new Intl.NumberFormat('zh-TW', { maximumFractionDigits: 0 }).format(val);
+  const formatDec = (val: number) => val.toFixed(2);
+  const formatCurrency = (val: number) => new Intl.NumberFormat('zh-TW', { style: 'currency', currency: 'TWD', maximumFractionDigits: 0 }).format(val);
+
+  return (
+    <div className="min-h-screen bg-slate-50 p-4 md:p-6 font-sans text-slate-800">
+      <header className="max-w-[1600px] mx-auto mb-6 flex justify-between items-center">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-3">
+            <Calculator className="text-blue-600" />
+            電商廣告混和成效模擬器
+          </h1>
+          <p className="text-slate-500 mt-1 text-sm">
+            模擬分析：輸入模擬數值，即時推演優化成效與營收增長。
+          </p>
+        </div>
+        <div className="hidden lg:block bg-white px-4 py-2 rounded-lg shadow-sm text-sm text-slate-600 border border-slate-200">
+          <span className="font-semibold text-blue-600">Pro 模式</span> | 支援雙軌模擬與靈敏度分析
+        </div>
+      </header>
+
+      {/* MAIN GRID LAYOUT: 3 COLUMNS */}
+      <main className="max-w-[1600px] mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+        
+        {/* COLUMN 1: Traffic Ads Input (25%) */}
+        <div className="lg:col-span-3 flex flex-col h-full">
+          <Card className="p-5 border-l-4 border-l-blue-500 h-full flex flex-col">
+            <SectionHeader title="流量廣告設定" icon={MousePointerClick} className="text-blue-800" />
+            <div className="space-y-1 mb-4">
+                {/* Inputs with Sim Field */}
+                <InputGroup label="預算 (Budget)" value={trafficAds.budget} simValue={trafficSim.budget} onChange={(v: number)=>handleTrafficChange('budget',v)} onSimChange={(v: number)=>handleTrafficSimChange('budget',v)} min={0} max={500000} step={1000} prefix="$" colorTheme="blue" />
+                <InputGroup label="CPM" value={trafficAds.cpm} simValue={trafficSim.cpm} onChange={(v: number)=>handleTrafficChange('cpm',v)} onSimChange={(v: number)=>handleTrafficSimChange('cpm',v)} min={10} max={1000} step={10} prefix="$" colorTheme="blue" />
+                <InputGroup label="CTR" value={trafficAds.ctr} simValue={trafficSim.ctr} onChange={(v: number)=>handleTrafficChange('ctr',v)} onSimChange={(v: number)=>handleTrafficSimChange('ctr',v)} min={0.1} max={10.0} step={0.1} unit="%" colorTheme="blue" />
+                <InputGroup label="加購率 (ATC)" value={trafficAds.atcRate} simValue={trafficSim.atcRate} onChange={(v: number)=>handleTrafficChange('atcRate',v)} onSimChange={(v: number)=>handleTrafficSimChange('atcRate',v)} min={0} max={30} step={0.5} unit="%" colorTheme="blue" />
+                <InputGroup label="結帳率 (Conv.)" value={trafficAds.cartConvRate} simValue={trafficSim.cartConvRate} onChange={(v: number)=>handleTrafficChange('cartConvRate',v)} onSimChange={(v: number)=>handleTrafficSimChange('cartConvRate',v)} min={0} max={100} step={1} unit="%" colorTheme="blue" />
+                <InputGroup label="客單價 (AOV)" value={trafficAds.aov} simValue={trafficSim.aov} onChange={(v: number)=>handleTrafficChange('aov',v)} onSimChange={(v: number)=>handleTrafficSimChange('aov',v)} min={0} max={10000} step={50} prefix="$" colorTheme="blue" />
+            </div>
+            {/* Results Preview */}
+            <CampaignResultPreview metrics={trafficBaseMetrics} simMetrics={trafficSimMetrics} colorTheme="blue" />
+          </Card>
+        </div>
+
+        {/* COLUMN 2: Conversion Ads Input (25%) */}
+        <div className="lg:col-span-3 flex flex-col h-full">
+          <Card className="p-5 border-l-4 border-l-emerald-500 h-full flex flex-col">
+            <SectionHeader title="轉換廣告設定" icon={Target} className="text-emerald-800" />
+            <div className="space-y-1 mb-4">
+                <InputGroup label="預算 (Budget)" value={convAds.budget} simValue={convSim.budget} onChange={(v: number)=>handleConvChange('budget',v)} onSimChange={(v: number)=>handleConvSimChange('budget',v)} min={0} max={500000} step={1000} prefix="$" colorTheme="emerald" />
+                <InputGroup label="CPM" value={convAds.cpm} simValue={convSim.cpm} onChange={(v: number)=>handleConvChange('cpm',v)} onSimChange={(v: number)=>handleConvSimChange('cpm',v)} min={10} max={1000} step={10} prefix="$" colorTheme="emerald" />
+                <InputGroup label="CTR" value={convAds.ctr} simValue={convSim.ctr} onChange={(v: number)=>handleConvChange('ctr',v)} onSimChange={(v: number)=>handleConvSimChange('ctr',v)} min={0.1} max={10.0} step={0.1} unit="%" colorTheme="emerald" />
+                <InputGroup label="加購率 (ATC)" value={convAds.atcRate} simValue={convSim.atcRate} onChange={(v: number)=>handleConvChange('atcRate',v)} onSimChange={(v: number)=>handleConvSimChange('atcRate',v)} min={1} max={30} step={0.5} unit="%" colorTheme="emerald" />
+                <InputGroup label="結帳率 (Conv.)" value={convAds.cartConvRate} simValue={convSim.cartConvRate} onChange={(v: number)=>handleConvChange('cartConvRate',v)} onSimChange={(v: number)=>handleConvSimChange('cartConvRate',v)} min={1} max={100} step={1} unit="%" colorTheme="emerald" />
+                <InputGroup label="客單價 (AOV)" value={convAds.aov} simValue={convSim.aov} onChange={(v: number)=>handleConvChange('aov',v)} onSimChange={(v: number)=>handleConvSimChange('aov',v)} min={100} max={10000} step={50} prefix="$" colorTheme="emerald" />
+            </div>
+             {/* Results Preview */}
+             <CampaignResultPreview metrics={convBaseMetrics} simMetrics={convSimMetrics} colorTheme="emerald" />
+          </Card>
+        </div>
+
+        {/* COLUMN 3: Blended Dashboard (50%) */}
+        <div className="lg:col-span-6 space-y-5">
+          
+          {/* Top Level KPIs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            <MetricCard 
+              title="混合 ROAS" 
+              value={blendedBase.roas} 
+              simValue={blendedSim.roas}
+              subtext="總營收 / 總預算"
+              icon={TrendingUp}
+              color={blendedSim.roas >= 3 ? "emerald" : blendedSim.roas >= 1.5 ? "blue" : "orange"}
+              isDecimal
+            />
+            <MetricCard 
+              title="預估總營收" 
+              value={blendedBase.revenue} 
+              simValue={blendedSim.revenue}
+              subtext={`共 ${formatNumber(blendedSim.purchases)} 筆訂單`}
+              icon={DollarSign}
+              isCurrency
+              color="blue"
+            />
+            <MetricCard 
+              title="混合 CPA" 
+              value={blendedBase.cpa} 
+              simValue={blendedSim.cpa}
+              subtext="平均獲客成本"
+              icon={CreditCard}
+              isCurrency
+              color="purple"
+            />
+          </div>
+
+          {/* Secondary Metrics Grid */}
+          <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+             {/* 1. CVR */}
+             <Card className="p-3 flex flex-col justify-center items-center text-center">
+                <span className="text-xs text-slate-500 mb-1">總轉換率 (CVR)</span>
+                <span className="text-lg font-bold text-slate-700">{formatDec(blendedSim.overallCvr)}%</span>
+                {blendedSim.overallCvr !== blendedBase.overallCvr && (
+                    <span className={`text-[10px] ${blendedSim.overallCvr > blendedBase.overallCvr ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {blendedSim.overallCvr > blendedBase.overallCvr ? '▲' : '▼'} {formatDec(Math.abs(blendedSim.overallCvr - blendedBase.overallCvr))}%
+                    </span>
+                )}
+             </Card>
+             
+             {/* 2. Clicks (With Comparison) */}
+             <Card className="p-3 flex flex-col justify-center items-center text-center">
+                <span className="text-xs text-slate-500 mb-1">總點擊 (Clicks)</span>
+                <span className="text-lg font-bold text-slate-700">{formatNumber(blendedSim.clicks)}</span>
+                {blendedSim.clicks !== blendedBase.clicks && (
+                    <span className={`text-[10px] ${blendedSim.clicks > blendedBase.clicks ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {blendedSim.clicks > blendedBase.clicks ? '▲' : '▼'} {formatNumber(Math.abs(blendedSim.clicks - blendedBase.clicks))}
+                    </span>
+                )}
+             </Card>
+
+             {/* 3. CPC (With Comparison & Inverse Logic) */}
+             <Card className="p-3 flex flex-col justify-center items-center text-center">
+                <span className="text-xs text-slate-500 mb-1">混合 CPC</span>
+                <span className="text-lg font-bold text-slate-700">{formatCurrency(blendedSim.cpc)}</span>
+                {blendedSim.cpc !== blendedBase.cpc && (
+                    <span className={`text-[10px] ${blendedSim.cpc < blendedBase.cpc ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {blendedSim.cpc < blendedBase.cpc ? '▼' : '▲'} {formatCurrency(Math.abs(blendedSim.cpc - blendedBase.cpc))}
+                    </span>
+                )}
+             </Card>
+
+             {/* 4. AOV (With Comparison) */}
+             <Card className="p-3 flex flex-col justify-center items-center text-center">
+                <span className="text-xs text-slate-500 mb-1">混合 AOV</span>
+                <span className="text-lg font-bold text-slate-700">{formatCurrency(blendedSim.blendedAov)}</span>
+                 {blendedSim.blendedAov !== blendedBase.blendedAov && (
+                    <span className={`text-[10px] ${blendedSim.blendedAov > blendedBase.blendedAov ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {blendedSim.blendedAov > blendedBase.blendedAov ? '▲' : '▼'} {formatCurrency(Math.abs(blendedSim.blendedAov - blendedBase.blendedAov))}
+                    </span>
+                )}
+             </Card>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* Funnel Visualization */}
+            <Card className="p-5">
+                <SectionHeader title="混合轉化漏斗 (模擬值)" icon={BarChart3} />
+                <div className="h-40 w-full mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={funnelData} layout="vertical" margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
+                    <XAxis type="number" hide />
+                    <YAxis type="category" dataKey="name" width={100} tick={{fontSize: 12}} />
+                    <Tooltip 
+                        cursor={{fill: 'transparent'}}
+                        formatter={(value) => formatNumber(Number(value))}
+                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    />
+                    <Bar dataKey="value" barSize={20} radius={[0, 4, 4, 0]}>
+                        {funnelData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                    </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
+                </div>
+                
+                <div className="flex justify-between mt-3 text-xs bg-slate-50 p-2 rounded">
+                   <div className="text-center">
+                      <div className="text-slate-400">CTR</div>
+                      <div className="font-bold text-slate-700">{formatDec(blendedSim.blendedCtr)}%</div>
+                   </div>
+                   <div className="text-center">
+                      <div className="text-slate-400">ATC</div>
+                      <div className="font-bold text-slate-700">{formatDec(blendedSim.blendedAtcRate)}%</div>
+                   </div>
+                   <div className="text-center">
+                      <div className="text-slate-400">結帳</div>
+                      <div className="font-bold text-slate-700">{formatDec(blendedSim.blendedCartConvRate)}%</div>
+                   </div>
+                </div>
+            </Card>
+
+            {/* NEW: Sensitivity Analysis */}
+            <SensitivityAnalysis baseMetrics={blendedSim} mergedInputs={{ traffic: trafficSimInputs, conv: convSimInputs }} />
+          </div>
+
+          {/* Diagnostics */}
+          <Card className="p-5 bg-slate-800 text-slate-200 border-none">
+            <SectionHeader title="總體優化診斷" icon={Activity} className="text-white" />
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-2">
+              <div>
+                <h4 className="font-bold text-white mb-2 flex items-center gap-2 text-sm">
+                  <Split size={14} className="text-blue-400" />
+                  模擬預算配置
+                </h4>
+                <div className="w-full bg-slate-700 h-2 rounded-full overflow-hidden flex mb-2">
+                   <div style={{width: `${((trafficSimInputs.budget / (trafficSimInputs.budget + convSimInputs.budget)) * 100)}%`}} className="bg-blue-500 h-full"></div>
+                   <div style={{width: `${((convSimInputs.budget / (trafficSimInputs.budget + convSimInputs.budget)) * 100)}%`}} className="bg-emerald-500 h-full"></div>
+                </div>
+                <div className="flex justify-between text-xs text-slate-400">
+                    <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div>流量 {((trafficSimInputs.budget / (trafficSimInputs.budget + convSimInputs.budget)) * 100).toFixed(0)}%</span>
+                    <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div>轉換 {((convSimInputs.budget / (trafficSimInputs.budget + convSimInputs.budget)) * 100).toFixed(0)}%</span>
+                </div>
+              </div>
+              
+              <div className="border-l border-slate-600 pl-4">
+                <h4 className="font-bold text-white mb-2 flex items-center gap-2 text-sm">
+                  <ShoppingCart size={14} className="text-emerald-400" />
+                  模擬效益
+                </h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                   若執行模擬參數，預估回收 <span className="text-emerald-400 font-bold">{formatCurrency(blendedSim.revenue)}</span>。
+                   較現況 {blendedSim.revenue >= blendedBase.revenue ? '增加' : '減少'} <span className="text-white font-bold">{formatCurrency(Math.abs(blendedSim.revenue - blendedBase.revenue))}</span>。
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </main>
+    </div>
+  );
+}
